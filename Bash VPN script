@@ -1,0 +1,305 @@
+#!/bin/bash
+#### This script contains mostly commands I have stolen from Stack Exchange and a few other websites
+#### Thanks to ptrimboli for the help on checking the novpn part
+#### 2015 - tgarbin	
+
+#### To Do: make a log file of the process for debugging
+
+DEBUGMODE=N
+Filename=./scripts/vpn.log
+
+if [ "$DEBUGMODE" = Y ]; then
+ echo -e "\e[31mDEBUG\e[0m: $0: about to parse datafile;" 1>&2
+ echo -e "Filename is [\e[35m$Filename\e[0m]" 1>&2
+ trap "echo $0: [\$LINENO]" DEBUG
+fi
+
+## Go to Working Directory
+cd /home/rancid
+
+## Modify these variables to your specific needs:
+## Rancid specific variables
+## Rancid Directory
+ranrun=/home/rancid/bin/clogin
+## Crypto map
+CMAP=''
+##Crypto isakmp peer 0 key - please tell me how you can use 6 peer key, it doesn't seem to work.
+VPN=''
+## Your router Hostname/Address
+LRTR=''
+
+## Your peer's internal Hostname/Address
+VPEER=''
+## Your peer's external Hostname/Address
+EPEER=''
+
+## Variables
+verify1=`ping -c 35 $VPEER | grep -Eo '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | awk -F'[ :]' 'NR==35'`
+newip=`ping -c 5 $EPEER | grep -Eo '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | awk -F'[ :]' 'NR==5'`
+oldip=./scripts/iplog.txt
+deletedvpn=./scripts/deletedvpn
+lastWAN=$(cat ./scripts/lastWAN.txt)
+old=$(cat ./scripts/iplog.txt)
+wheredate=`which date`
+date=$($wheredate)
+
+## Functions
+### Mail Functions
+## buse = Branch update success email
+buse () {
+subject="Branch IP has changed."
+body="The Branch router has aquired a new IP address on $date
+
+New IP: $new
+
+Old IP: $old
+
+Last Known WAN IP: $lastWAN"
+}
+
+## brfe = Branch router failed email
+brfe () {
+subject="Branch Router is down!"
+body="The branch router cannot be reached on $date"
+}
+
+## rvfe = Remove VPN failure email
+rvfe () {
+subject="Cant remove VPN config! - HQ"
+body="The local router cannot be reached on $date"
+}
+
+## brbu = Brach router back up
+brbu () {
+subject="VPN back up! - HQ"
+body="The VPN has been re-established on $date"
+}
+
+## Email template
+notify () {
+local mail_srv_ip=127.0.0.1
+local mail_srv_port=25
+local recipient=
+nc $mail_srv_ip $mail_srv_port << EOF
+ehlo mail.script
+mail from:<>
+rcpt to:<$recipient>
+data
+subject: $subject
+$body
+
+VPN Script
+.
+quit
+EOF
+}
+
+success () { buse; notify; }
+
+branchfail () { brfe; notify; }
+
+rollbackfail () { rvfe; notify; }
+
+upup () { brbu; notify; }
+
+## Clogin Functions
+
+rclog () {
+if [[ $(($ranrun -c "conf t; no crypto isakmp key 0 $VPN address $(cat ./scripts/iplog.txt) no-xauth; crypto map $CMAP 1 ipsec-isakmp; no set peer $(cat ./scripts/iplog.txt); end; wr;" $LRTR) | grep 'Error:') ]]; then
+
+{
+echo "...And I can't even access the router"
+echo "Sending email of failure"
+} 1>&2
+ 
+## Email config removal failure.
+## rvfe = Remove VPN failure email
+rollbackfail; exit
+
+else
+
+## Make a file to be checked next time the lookup fails. If found, the remove config step will be skipped and it will just end script.
+ touch ./scripts/deletedvpn
+## Remove the IP in the log so it stops updating if it comes back up with the same IP
+# echo "" > ./scripts/iplog.txt
+ echo "Removed old config, ending script" 
+## Email config removal and router down notice.
+## brfe = Branch router failed email
+branchfail; exit
+
+fi
+}
+
+dejavu () {
+if [[ $(($ranrun -c "conf t; no crypto isakmp key 0 $VPN address $(cat ./scripts/iplog.txt) no-xauth; crypto map $CMAP 1 ipsec-isakmp; no set peer $(cat ./scripts/iplog.txt); end; wr;" $LRTR) | grep 'Error:') ]]; then
+
+{
+echo "...And I can't even access the router"
+echo "Sending email of failure"
+} 1>&2
+
+## Email config removal failure.
+rollbackfail; exit
+
+else
+
+## Make a file to be checked next time the lookup fails. If found, the remove config step will be skipped and it will just end script.
+ touch ./scripts/deletedvpn;
+## Remove the IP in the log so it stops updating if it comes back up with the same IP
+ echo "" > ./scripts/iplog.txt;
+
+if [ "$newip" != "$(cat ./scripts/dejavu.txt)" ]; then
+## Email config removal and router down notice.
+ echo "" > ./scripts/dejavu.txt;
+ echo "Removed old config, ending script and emailing." 1>&2;
+
+branchfail; exit
+
+else
+
+echo "The WAN IP $newip is the same as when email was sent and the tunnel is still down, ending script and preventing spam emails about it" 1>&2
+
+ fi
+
+fi
+}
+
+clog () {
+if [[ $(($ranrun -c "conf t; crypto isakmp key 0 $VPN address $newip no-xauth; crypto map $CMAP 1 ipsec-isakmp; set peer $newip; end; wr;" $LRTR) | grep 'Error:') ]]; then
+
+# To Do: use push notification )Y)
+  echo "Router Update Failed! Sending email..." 1>&2
+
+## Email config update failure.
+rollbackfail; exit
+
+else
+
+rm ./scripts/deletedvpn
+
+fi
+}
+
+rclogfail () {
+if [[ $(($ranrun -c "conf t; no crypto isakmp key 0 $VPN address $(cat ./scripts/iplog.txt) no-xauth; crypto isakmp key 0 $VPN address $newip no-xauth; crypto map $CMAP 1 ipsec-isakmp; no set peer $(cat ./scripts/iplog.txt); set peer $newip; end; wr;" $LRTR) | grep 'Error:') ]]; then
+
+# To Do: use push notification )Y)
+  echo "Router Update Failed! Sending email..." 1>&2
+
+## Email config update failure
+rollbackfail; exit
+
+elif [ -e "$novpn" ]; then
+
+rm ./scripts/deletedvpn
+
+fi
+}
+
+########################
+###### MAIN SCRIPT #####
+########################
+
+## Check if IP address resolve has failed and returned null value. If so login and remove the old config.
+if [ -z "$newip" ]; then
+
+ echo "Oh Dear! I could not resolve the IP." 1>&2
+
+if [ -e "$deletedvpn" ]; then
+
+ echo "No config removal needed, ending script."; 1>&2
+
+exit
+
+else
+
+rclog
+
+ fi
+
+fi
+
+## Check if IP address has changed
+if [ "$newip" != "$(cat ./scripts/iplog.txt)" ]; then
+
+echo "IP change! Configuring router for VPN update" 1>&2
+
+## Check if IP address resolve has failed and returned null value. If so the tunnel is not up so remove the config.
+elif [[ "$newip" == "$(cat ./scripts/iplog.txt)" && ! -z "$verify1" && -e "./scripts/vpndown" ]]; then
+
+echo "VPN back up, sending email..." && upup
+
+rm ./scripts/vpndown; exit
+
+elif [[ "$newip" == "$(cat ./scripts/iplog.txt)" && ! -z "$verify1" ]]; then
+
+echo "No IP change, no config change required, Tunnel still up!" 1>&2; exit
+
+else
+
+echo "Oh Dear! The IP hasn't changed but I could not resolve internal branch IP. Something is wrong." 1>&2
+
+## Need to make a file somewhere to check next time it happens. so if it fails and emails me then come back up on its own, let me know. 
+touch ./scripts/vpndown
+
+## brfe = Branch router failed email
+branchfail; exit
+
+fi
+
+## Check to see if the outdated config doesn't exist. if so, run clog whic just adds the new config.
+if [ -e "$deletedvpn" ]; then
+
+clog
+
+## Check to see if the outdated config does exist. if so, run rclogfail which removed ths old config and then adds the new config.
+elif [ ! -f "$deletedvpn" ]; then
+
+rclogfail
+
+fi
+
+## If either of the previous two commands execute successfully, do this.
+echo "Update Success! Pinging internal IP to see if VPN is up..." 1>&2
+echo "Sleeping for 5"
+sleep 5
+
+## Contextually relevent log variables.
+## Save last failed IP so i dont get email spam if the external ip does not change.
+echo "$newip" > ./scripts/lastWAN.txt
+## We "assume" for now that we have the correct new IP, so change the ip log...
+#echo "$newip" > ./scripts/iplog.txt
+
+## Contextual based variable
+verify=`ping -c 35 $VPEER | grep -Eo '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | awk -F'[ :]' 'NR==35'`
+
+## Check if the internal branch IP address ping succeeds. If not so that is not my IP, the tunnel is not up so remove the config.
+if [ -z "$verify" ]; then
+
+ echo "Oh Dear! I could not resolve internal branch IP, [$newip] must not be our real WAN IP." 1>&2
+
+dejavu
+
+## Save last failed IP so i dont get email spam if the external ip does not change.
+echo "$newip" > ./scripts/dejavu.txt; exit
+
+## Check if the internal branch IP address ping succeeds. If so, echo the success.
+elif [ ! -z "$verify" ]; then
+
+echo "VPN is UP/UP" 1>&2
+echo "Sending New IP [$newip] and VPN confrimation email..." 1>&2
+
+ if [ -e "./scripts/vpndown" ]; then
+
+rm ./scripts/vpndown
+
+ fi
+
+echo "$newip" > ./scripts/iplog.txt
+
+## Email specific contextually important variable
+new=$(cat ./scripts/iplog.txt)
+## Email IP and VPN Success
+success
+
+fi
