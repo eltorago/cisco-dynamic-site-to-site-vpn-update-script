@@ -5,6 +5,8 @@
 
 #### To Do: make a log file of the process for debugging
 
+### Run this script as the rancid user or the user with rancid access.
+
 DEBUGMODE=N
 Filename=./scripts/vpn.log
 
