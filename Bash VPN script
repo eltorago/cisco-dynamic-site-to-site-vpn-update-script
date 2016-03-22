@@ -22,63 +22,64 @@ cd /home/rancid
 ## Modify these variables to your specific needs:
 ## Rancid specific variables
 ## Rancid Directory
-ranrun=/home/rancid/bin/clogin
+RANCID_RUN=/home/rancid/bin/clogin
 ## Crypto map
-CMAP=''
+CRYPTO_MAP=''
 ##Crypto isakmp peer 0 key - please tell me how you can use 6 peer key, it doesn't seem to work.
-VPN=''
+VPN_KEY=''
 ## Your router Hostname/Address
-LRTR=''
+LOCAL_ROUTER=''
 
 ## Your peer's internal Hostname/Address
-VPEER=''
+PEER_ROUTER_INTERNAL_HOSTNAME=''
 ## Your peer's external Hostname/Address
-EPEER=''
+PEER_ROUTER_EXTERNAL_HOSTNAME=''
 
-## Variables
-verify1=`ping -c 35 $VPEER | grep -Eo '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | awk -F'[ :]' 'NR==35'`
-newip=`ping -c 5 $EPEER | grep -Eo '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | awk -F'[ :]' 'NR==5'`
-oldip=./scripts/iplog.txt
-deletedvpn=./scripts/deletedvpn
+## General variables
+INTERNAL_PING=`ping -c 35 $PEER_ROUTER_INTERNAL_HOSTNAME | grep -Eo '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | awk -F'[ :]' 'NR==35'`
+PEER_ROUTER_EXTERNAL_IP=`ping -c 5 $PEER_ROUTER_EXTERNAL_HOSTNAME | grep -Eo '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | awk -F'[ :]' 'NR==5'`
+VPN_CONFIG_DELETED_FILE=./scripts/deletedvpn
 lastWAN=$(cat ./scripts/lastWAN.txt)
-old=$(cat ./scripts/iplog.txt)
-wheredate=`which date`
-date=$($wheredate)
+lastWANFILE=./scripts/lastWAN.txt
+OLD_PEER_ROUTER_EXTERNAL_IP=$(cat ./scripts/iplog.txt)
+WHERE_IS_DATE=`which date`
+date=$($WHERE_IS_DATE)
 
 ## Functions
 ### Mail Functions
-## buse = Branch update success email
-buse () {
+PEER_UPDATE_SUCESS_TEMPLATE () {
 subject="Branch IP has changed."
 body="The Branch router has aquired a new IP address on $date
 
-New IP: $new
+New IP: $NEW_PEER_ROUTER_EXTERNAL_IP
 
 Old IP: $old
 
 Last Known WAN IP: $lastWAN"
 }
 
-## brfe = Branch router failed email
-brfe () {
+PEER_ROUTER_IS_DOWN_TEMPLATE () {
 subject="Branch Router is down!"
 body="The branch router cannot be reached on $date"
 }
 
-## rvfe = Remove VPN failure email
-rvfe () {
-subject="Cant remove VPN config! - HQ"
+VPN_REMOVAL_FAILURE_TEMPLATE () {
+subject="Cant remove VPN config!"
 body="The local router cannot be reached on $date"
 }
 
-## brbu = Brach router back up
-brbu () {
-subject="VPN back up! - HQ"
+VPN_UPDATE_FAILURE_TEMPLATE () {
+subject="Cant update VPN config!"
+body="The local router cannot be configured on $date"
+}
+
+PEER_ROUTER_BACK_UP_TEMPLATE () {
+subject="VPN back up!"
 body="The VPN has been re-established on $date"
 }
 
 ## Email template
-notify () {
+BASE_EMAIL_TEMPLATE () {
 local mail_srv_ip=127.0.0.1
 local mail_srv_port=25
 local recipient=
@@ -96,18 +97,20 @@ quit
 EOF
 }
 
-success () { buse; notify; }
+SENDING_PEER_UPDATE_SUCCESS_EMAIL () { PEER_UPDATE_SUCESS_TEMPLATE; BASE_EMAIL_TEMPLATE; }
 
-branchfail () { brfe; notify; }
+SENDING_PEER_ROUTER_DOWN_EMAIL () { PEER_ROUTER_IS_DOWN_TEMPLATE; BASE_EMAIL_TEMPLATE; }
 
-rollbackfail () { rvfe; notify; }
+SENDING_VPN_REMOVAL_FAILURE_EMAIL () { VPN_REMOVAL_FAILURE_TEMPLATE; BASE_EMAIL_TEMPLATE; }
 
-upup () { brbu; notify; }
+SENDING_VPN_UPDATE_FAILURE_EMAIL () { VPN_UPDATE_FAILURE_TEMPLATE; BASE_EMAIL_TEMPLATE; }
+
+SENGING_PEER_ROUTER_BACK_UP_EMAIL () { PEER_ROUTER_BACK_UP_TEMPLATE; BASE_EMAIL_TEMPLATE; }
 
 ## Clogin Functions
 
 rclog () {
-if [[ $(($ranrun -c "conf t; no crypto isakmp key 0 $VPN address $(cat ./scripts/iplog.txt) no-xauth; crypto map $CMAP 1 ipsec-isakmp; no set peer $(cat ./scripts/iplog.txt); end; wr;" $LRTR) | grep 'Error:') ]]; then
+if [[ $(($RANCID_RUN -c "conf t; no crypto isakmp key 0 $VPN_KEY address $OLD_PEER_ROUTER_EXTERNAL_IP no-xauth; crypto map $CRYPTO_MAP 1 ipsec-isakmp; no set peer $OLD_PEER_ROUTER_EXTERNAL_IP; end; wr;" $LOCAL_ROUTER) | grep 'Error:') ]]; then
 
 {
 echo "...And I can't even access the router"
@@ -115,8 +118,7 @@ echo "Sending email of failure"
 } 1>&2
  
 ## Email config removal failure.
-## rvfe = Remove VPN failure email
-rollbackfail; exit
+SENDING_VPN_REMOVAL_FAILURE_EMAIL; exit
 
 else
 
@@ -126,14 +128,13 @@ else
 # echo "" > ./scripts/iplog.txt
  echo "Removed old config, ending script" 
 ## Email config removal and router down notice.
-## brfe = Branch router failed email
-branchfail; exit
+SENDING_PEER_ROUTER_DOWN_EMAIL; exit
 
 fi
 }
 
 dejavu () {
-if [[ $(($ranrun -c "conf t; no crypto isakmp key 0 $VPN address $(cat ./scripts/iplog.txt) no-xauth; crypto map $CMAP 1 ipsec-isakmp; no set peer $(cat ./scripts/iplog.txt); end; wr;" $LRTR) | grep 'Error:') ]]; then
+if [[ $(($RANCID_RUN -c "conf t; no crypto isakmp key 0 $VPN_KEY address $OLD_PEER_ROUTER_EXTERNAL_IP no-xauth; crypto map $CRYPTO_MAP 1 ipsec-isakmp; no set peer $OLD_PEER_ROUTER_EXTERNAL_IP; end; wr;" $LOCAL_ROUTER) | grep 'Error:') ]]; then
 
 {
 echo "...And I can't even access the router"
@@ -141,7 +142,7 @@ echo "Sending email of failure"
 } 1>&2
 
 ## Email config removal failure.
-rollbackfail; exit
+SENDING_VPN_REMOVAL_FAILURE_EMAIL; exit
 
 else
 
@@ -150,16 +151,16 @@ else
 ## Remove the IP in the log so it stops updating if it comes back up with the same IP
  echo "" > ./scripts/iplog.txt;
 
-if [ "$newip" != "$(cat ./scripts/dejavu.txt)" ]; then
+if [ "$PEER_ROUTER_EXTERNAL_IP" != "$(cat ./scripts/dejavu.txt)" ]; then
 ## Email config removal and router down notice.
  echo "" > ./scripts/dejavu.txt;
  echo "Removed old config, ending script and emailing." 1>&2;
 
-branchfail; exit
+SENDING_PEER_ROUTER_DOWN_EMAIL; exit
 
 else
 
-echo "The WAN IP $newip is the same as when email was sent and the tunnel is still down, ending script and preventing spam emails about it" 1>&2
+echo "The WAN IP $PEER_ROUTER_EXTERNAL_IP is the same as when email was sent and the tunnel is still down, ending script and preventing spam emails about it" 1>&2
 
  fi
 
@@ -167,13 +168,13 @@ fi
 }
 
 clog () {
-if [[ $(($ranrun -c "conf t; crypto isakmp key 0 $VPN address $newip no-xauth; crypto map $CMAP 1 ipsec-isakmp; set peer $newip; end; wr;" $LRTR) | grep 'Error:') ]]; then
+if [[ $(($RANCID_RUN -c "conf t; crypto isakmp key 0 $VPN_KEY address $PEER_ROUTER_EXTERNAL_IP no-xauth; crypto map $CRYPTO_MAP 1 ipsec-isakmp; set peer $PEER_ROUTER_EXTERNAL_IP; end; wr;" $LOCAL_ROUTER) | grep 'Error:') ]]; then
 
 # To Do: use push notification )Y)
   echo "Router Update Failed! Sending email..." 1>&2
 
 ## Email config update failure.
-rollbackfail; exit
+SENDING_VPN_UPDATE_FAILURE_EMAIL; exit
 
 else
 
@@ -183,13 +184,13 @@ fi
 }
 
 rclogfail () {
-if [[ $(($ranrun -c "conf t; no crypto isakmp key 0 $VPN address $(cat ./scripts/iplog.txt) no-xauth; crypto isakmp key 0 $VPN address $newip no-xauth; crypto map $CMAP 1 ipsec-isakmp; no set peer $(cat ./scripts/iplog.txt); set peer $newip; end; wr;" $LRTR) | grep 'Error:') ]]; then
+if [[ $(($RANCID_RUN -c "conf t; no crypto isakmp key 0 $VPN_KEY address $OLD_PEER_ROUTER_EXTERNAL_IP no-xauth; crypto isakmp key 0 $VPN_KEY address $PEER_ROUTER_EXTERNAL_IP no-xauth; crypto map $CRYPTO_MAP 1 ipsec-isakmp; no set peer $OLD_PEER_ROUTER_EXTERNAL_IP; set peer $PEER_ROUTER_EXTERNAL_IP; end; wr;" $LOCAL_ROUTER) | grep 'Error:') ]]; then
 
 # To Do: use push notification )Y)
   echo "Router Update Failed! Sending email..." 1>&2
 
 ## Email config update failure
-rollbackfail; exit
+SENDING_VPN_REMOVAL_FAILURE_EMAIL; exit
 
 elif [ -e "$novpn" ]; then
 
@@ -203,11 +204,11 @@ fi
 ########################
 
 ## Check if IP address resolve has failed and returned null value. If so login and remove the old config.
-if [ -z "$newip" ]; then
+if [ -z "$PEER_ROUTER_EXTERNAL_IP" ]; then
 
  echo "Oh Dear! I could not resolve the IP." 1>&2
 
-if [ -e "$deletedvpn" ]; then
+if [ -e "$VPN_CONFIG_DELETED_FILE" ]; then
 
  echo "No config removal needed, ending script."; 1>&2
 
@@ -222,18 +223,18 @@ rclog
 fi
 
 ## Check if IP address has changed
-if [ "$newip" != "$(cat ./scripts/iplog.txt)" ]; then
+if [ "$PEER_ROUTER_EXTERNAL_IP" != "$OLD_PEER_ROUTER_EXTERNAL_IP" ]; then
 
 echo "IP change! Configuring router for VPN update" 1>&2
 
 ## Check if IP address resolve has failed and returned null value. If so the tunnel is not up so remove the config.
-elif [[ "$newip" == "$(cat ./scripts/iplog.txt)" && ! -z "$verify1" && -e "./scripts/vpndown" ]]; then
+elif [[ "$PEER_ROUTER_EXTERNAL_IP" == "$OLD_PEER_ROUTER_EXTERNAL_IP" && ! -z "$INTERNAL_PING" && -e "./scripts/vpndown" ]]; then
 
-echo "VPN back up, sending email..." && upup
+echo "VPN back up, sending email..." && SENGING_PEER_ROUTER_BACK_UP_EMAIL
 
 rm ./scripts/vpndown; exit
 
-elif [[ "$newip" == "$(cat ./scripts/iplog.txt)" && ! -z "$verify1" ]]; then
+elif [[ "$PEER_ROUTER_EXTERNAL_IP" == "$OLD_PEER_ROUTER_EXTERNAL_IP" && ! -z "$INTERNAL_PING" ]]; then
 
 echo "No IP change, no config change required, Tunnel still up!" 1>&2; exit
 
@@ -244,18 +245,17 @@ echo "Oh Dear! The IP hasn't changed but I could not resolve internal branch IP.
 ## Need to make a file somewhere to check next time it happens. so if it fails and emails me then come back up on its own, let me know. 
 touch ./scripts/vpndown
 
-## brfe = Branch router failed email
-branchfail; exit
+SENDING_PEER_ROUTER_DOWN_EMAIL; exit
 
 fi
 
 ## Check to see if the outdated config doesn't exist. if so, run clog whic just adds the new config.
-if [ -e "$deletedvpn" ]; then
+if [ -e "$VPN_CONFIG_DELETED_FILE" ]; then
 
 clog
 
 ## Check to see if the outdated config does exist. if so, run rclogfail which removed ths old config and then adds the new config.
-elif [ ! -f "$deletedvpn" ]; then
+elif [ ! -f "$VPN_CONFIG_DELETED_FILE" ]; then
 
 rclogfail
 
@@ -268,28 +268,28 @@ sleep 5
 
 ## Contextually relevent log variables.
 ## Save last failed IP so i dont get email spam if the external ip does not change.
-echo "$newip" > ./scripts/lastWAN.txt
+echo "$PEER_ROUTER_EXTERNAL_IP" > $lastWANFILE
 ## We "assume" for now that we have the correct new IP, so change the ip log...
-#echo "$newip" > ./scripts/iplog.txt
+#echo "$PEER_ROUTER_EXTERNAL_IP" > ./scripts/iplog.txt
 
 ## Contextual based variable
-verify=`ping -c 35 $VPEER | grep -Eo '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | awk -F'[ :]' 'NR==35'`
+verify=`ping -c 35 $PEER_ROUTER_INTERNAL_HOSTNAME | grep -Eo '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | awk -F'[ :]' 'NR==35'`
 
 ## Check if the internal branch IP address ping succeeds. If not so that is not my IP, the tunnel is not up so remove the config.
 if [ -z "$verify" ]; then
 
- echo "Oh Dear! I could not resolve internal branch IP, [$newip] must not be our real WAN IP." 1>&2
+ echo "Oh Dear! I could not resolve internal branch IP, [$PEER_ROUTER_EXTERNAL_IP] must not be our real WAN IP." 1>&2
 
 dejavu
 
 ## Save last failed IP so i dont get email spam if the external ip does not change.
-echo "$newip" > ./scripts/dejavu.txt; exit
+echo "$PEER_ROUTER_EXTERNAL_IP" > ./scripts/dejavu.txt; exit
 
 ## Check if the internal branch IP address ping succeeds. If so, echo the success.
 elif [ ! -z "$verify" ]; then
 
 echo "VPN is UP/UP" 1>&2
-echo "Sending New IP [$newip] and VPN confrimation email..." 1>&2
+echo "Sending New IP [$PEER_ROUTER_EXTERNAL_IP] and VPN confrimation email..." 1>&2
 
  if [ -e "./scripts/vpndown" ]; then
 
@@ -297,11 +297,11 @@ rm ./scripts/vpndown
 
  fi
 
-echo "$newip" > ./scripts/iplog.txt
+echo "$PEER_ROUTER_EXTERNAL_IP" > ./scripts/iplog.txt
 
 ## Email specific contextually important variable
-new=$(cat ./scripts/iplog.txt)
+NEW_PEER_ROUTER_EXTERNAL_IP=$(cat ./scripts/iplog.txt)
 ## Email IP and VPN Success
-success
+SENDING_PEER_UPDATE_SUCCESS_EMAIL
 
 fi
