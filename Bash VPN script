@@ -109,7 +109,7 @@ SENGING_PEER_ROUTER_BACK_UP_EMAIL () { PEER_ROUTER_BACK_UP_TEMPLATE; BASE_EMAIL_
 
 ## Clogin Functions
 
-rclog () {
+RANCID_REMOVE_CONFIG () {
 if [[ $(($RANCID_RUN -c "conf t; no crypto isakmp key 0 $VPN_KEY address $OLD_PEER_ROUTER_EXTERNAL_IP no-xauth; crypto map $CRYPTO_MAP 1 ipsec-isakmp; no set peer $OLD_PEER_ROUTER_EXTERNAL_IP; end; wr;" $LOCAL_ROUTER) | grep 'Error:') ]]; then
 
 {
@@ -133,7 +133,7 @@ SENDING_PEER_ROUTER_DOWN_EMAIL; exit
 fi
 }
 
-dejavu () {
+RANCID_REMOVE_DEJA_VU () {
 if [[ $(($RANCID_RUN -c "conf t; no crypto isakmp key 0 $VPN_KEY address $OLD_PEER_ROUTER_EXTERNAL_IP no-xauth; crypto map $CRYPTO_MAP 1 ipsec-isakmp; no set peer $OLD_PEER_ROUTER_EXTERNAL_IP; end; wr;" $LOCAL_ROUTER) | grep 'Error:') ]]; then
 
 {
@@ -167,7 +167,7 @@ echo "The WAN IP $PEER_ROUTER_EXTERNAL_IP is the same as when email was sent and
 fi
 }
 
-clog () {
+RANCID_ADD_NEW_CONFIG () {
 if [[ $(($RANCID_RUN -c "conf t; crypto isakmp key 0 $VPN_KEY address $PEER_ROUTER_EXTERNAL_IP no-xauth; crypto map $CRYPTO_MAP 1 ipsec-isakmp; set peer $PEER_ROUTER_EXTERNAL_IP; end; wr;" $LOCAL_ROUTER) | grep 'Error:') ]]; then
 
 # To Do: use push notification )Y)
@@ -183,7 +183,7 @@ rm ./scripts/deletedvpn
 fi
 }
 
-rclogfail () {
+RANCID_UPDATE_CONFIG () {
 if [[ $(($RANCID_RUN -c "conf t; no crypto isakmp key 0 $VPN_KEY address $OLD_PEER_ROUTER_EXTERNAL_IP no-xauth; crypto isakmp key 0 $VPN_KEY address $PEER_ROUTER_EXTERNAL_IP no-xauth; crypto map $CRYPTO_MAP 1 ipsec-isakmp; no set peer $OLD_PEER_ROUTER_EXTERNAL_IP; set peer $PEER_ROUTER_EXTERNAL_IP; end; wr;" $LOCAL_ROUTER) | grep 'Error:') ]]; then
 
 # To Do: use push notification )Y)
@@ -216,7 +216,7 @@ exit
 
 else
 
-rclog
+RANCID_REMOVE_CONFIG
 
  fi
 
@@ -249,15 +249,15 @@ SENDING_PEER_ROUTER_DOWN_EMAIL; exit
 
 fi
 
-## Check to see if the outdated config doesn't exist. if so, run clog whic just adds the new config.
+## Check to see if the outdated config doesn't exist. if so, run RANCID_ADD_NEW_CONFIG whic just adds the new config.
 if [ -e "$VPN_CONFIG_DELETED_FILE" ]; then
 
-clog
+RANCID_ADD_NEW_CONFIG
 
-## Check to see if the outdated config does exist. if so, run rclogfail which removed ths old config and then adds the new config.
+## Check to see if the outdated config does exist. if so, run RANCID_UPDATE_CONFIG which removed ths old config and then adds the new config.
 elif [ ! -f "$VPN_CONFIG_DELETED_FILE" ]; then
 
-rclogfail
+RANCID_UPDATE_CONFIG
 
 fi
 
@@ -280,7 +280,7 @@ if [ -z "$verify" ]; then
 
  echo "Oh Dear! I could not resolve internal branch IP, [$PEER_ROUTER_EXTERNAL_IP] must not be our real WAN IP." 1>&2
 
-dejavu
+RANCID_REMOVE_DEJA_VU
 
 ## Save last failed IP so i dont get email spam if the external ip does not change.
 echo "$PEER_ROUTER_EXTERNAL_IP" > ./scripts/dejavu.txt; exit
