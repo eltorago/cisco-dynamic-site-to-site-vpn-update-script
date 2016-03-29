@@ -39,9 +39,12 @@ PEER_ROUTER_EXTERNAL_HOSTNAME=''
 INTERNAL_PING=`ping -c 35 $PEER_ROUTER_INTERNAL_HOSTNAME | grep -Eo '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | awk -F'[ :]' 'NR==35'`
 PEER_ROUTER_EXTERNAL_IP=`ping -c 5 $PEER_ROUTER_EXTERNAL_HOSTNAME | grep -Eo '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | awk -F'[ :]' 'NR==5'`
 VPN_CONFIG_DELETED_FILE=./scripts/deletedvpn
-lastWAN=$(cat ./scripts/lastWAN.txt)
-lastWANFILE=./scripts/lastWAN.txt
-OLD_PEER_ROUTER_EXTERNAL_IP=$(cat ./scripts/iplog.txt)
+VPN_DOWN_FILE=./scripts/vpndown
+CONFIG_DEJA_VU=./scripts/dejavu
+PEER_LAST_KNOWN_IP_LOG=./scripts/lastWAN.txt
+PEER_LAST_KNOWN_IP=$(cat $PEER_LAST_KNOWN_IP_LOG)
+OLD_PEER_ROUTER_EXTERNAL_IP_LOG=./scripts/iplog.txt
+OLD_PEER_ROUTER_EXTERNAL_IP=$(cat $OLD_PEER_ROUTER_EXTERNAL_IP_LOG)
 WHERE_IS_DATE=`which date`
 date=$($WHERE_IS_DATE)
 
@@ -55,7 +58,7 @@ New IP: $NEW_PEER_ROUTER_EXTERNAL_IP
 
 Old IP: $old
 
-Last Known WAN IP: $lastWAN"
+Last Known WAN IP: $PEER_LAST_KNOWN_IP"
 }
 
 PEER_ROUTER_IS_DOWN_TEMPLATE () {
@@ -123,9 +126,9 @@ SENDING_VPN_REMOVAL_FAILURE_EMAIL; exit
 else
 
 ## Make a file to be checked next time the lookup fails. If found, the remove config step will be skipped and it will just end script.
- touch ./scripts/deletedvpn
+ touch $VPN_CONFIG_DELETED_FILE
 ## Remove the IP in the log so it stops updating if it comes back up with the same IP
-# echo "" > ./scripts/iplog.txt
+# echo "" > $OLD_PEER_ROUTER_EXTERNAL_IP_LOG
  echo "Removed old config, ending script" 
 ## Email config removal and router down notice.
 SENDING_PEER_ROUTER_DOWN_EMAIL; exit
@@ -147,13 +150,13 @@ SENDING_VPN_REMOVAL_FAILURE_EMAIL; exit
 else
 
 ## Make a file to be checked next time the lookup fails. If found, the remove config step will be skipped and it will just end script.
- touch ./scripts/deletedvpn;
+ touch $VPN_CONFIG_DELETED_FILE;
 ## Remove the IP in the log so it stops updating if it comes back up with the same IP
- echo "" > ./scripts/iplog.txt;
+ echo "" > $OLD_PEER_ROUTER_EXTERNAL_IP_LOG;
 
-if [ "$PEER_ROUTER_EXTERNAL_IP" != "$(cat ./scripts/dejavu.txt)" ]; then
+if [ "$PEER_ROUTER_EXTERNAL_IP" != "$(cat $CONFIG_DEJA_VU)" ]; then
 ## Email config removal and router down notice.
- echo "" > ./scripts/dejavu.txt;
+ echo "" > $CONFIG_DEJA_VU;
  echo "Removed old config, ending script and emailing." 1>&2;
 
 SENDING_PEER_ROUTER_DOWN_EMAIL; exit
@@ -178,7 +181,7 @@ SENDING_VPN_UPDATE_FAILURE_EMAIL; exit
 
 else
 
-rm ./scripts/deletedvpn
+rm $VPN_CONFIG_DELETED_FILE
 
 fi
 }
@@ -194,7 +197,7 @@ SENDING_VPN_REMOVAL_FAILURE_EMAIL; exit
 
 elif [ -e "$novpn" ]; then
 
-rm ./scripts/deletedvpn
+rm $VPN_CONFIG_DELETED_FILE
 
 fi
 }
@@ -228,11 +231,11 @@ if [ "$PEER_ROUTER_EXTERNAL_IP" != "$OLD_PEER_ROUTER_EXTERNAL_IP" ]; then
 echo "IP change! Configuring router for VPN update" 1>&2
 
 ## Check if IP address resolve has failed and returned null value. If so the tunnel is not up so remove the config.
-elif [[ "$PEER_ROUTER_EXTERNAL_IP" == "$OLD_PEER_ROUTER_EXTERNAL_IP" && ! -z "$INTERNAL_PING" && -e "./scripts/vpndown" ]]; then
+elif [[ "$PEER_ROUTER_EXTERNAL_IP" == "$OLD_PEER_ROUTER_EXTERNAL_IP" && ! -z "$INTERNAL_PING" && -e "$VPN_DOWN_FILE" ]]; then
 
 echo "VPN back up, sending email..." && SENGING_PEER_ROUTER_BACK_UP_EMAIL
 
-rm ./scripts/vpndown; exit
+rm $VPN_DOWN_FILE; exit
 
 elif [[ "$PEER_ROUTER_EXTERNAL_IP" == "$OLD_PEER_ROUTER_EXTERNAL_IP" && ! -z "$INTERNAL_PING" ]]; then
 
@@ -243,7 +246,7 @@ else
 echo "Oh Dear! The IP hasn't changed but I could not resolve internal branch IP. Something is wrong." 1>&2
 
 ## Need to make a file somewhere to check next time it happens. so if it fails and emails me then come back up on its own, let me know. 
-touch ./scripts/vpndown
+touch $VPN_DOWN_FILE
 
 SENDING_PEER_ROUTER_DOWN_EMAIL; exit
 
@@ -268,9 +271,9 @@ sleep 5
 
 ## Contextually relevent log variables.
 ## Save last failed IP so i dont get email spam if the external ip does not change.
-echo "$PEER_ROUTER_EXTERNAL_IP" > $lastWANFILE
+echo "$PEER_ROUTER_EXTERNAL_IP" > $PEER_LAST_KNOWN_IP_LOG
 ## We "assume" for now that we have the correct new IP, so change the ip log...
-#echo "$PEER_ROUTER_EXTERNAL_IP" > ./scripts/iplog.txt
+#echo "$PEER_ROUTER_EXTERNAL_IP" > $OLD_PEER_ROUTER_EXTERNAL_IP_LOG
 
 ## Contextual based variable
 verify=`ping -c 35 $PEER_ROUTER_INTERNAL_HOSTNAME | grep -Eo '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | awk -F'[ :]' 'NR==35'`
@@ -283,7 +286,7 @@ if [ -z "$verify" ]; then
 RANCID_REMOVE_DEJA_VU
 
 ## Save last failed IP so i dont get email spam if the external ip does not change.
-echo "$PEER_ROUTER_EXTERNAL_IP" > ./scripts/dejavu.txt; exit
+echo "$PEER_ROUTER_EXTERNAL_IP" > $CONFIG_DEJA_VU; exit
 
 ## Check if the internal branch IP address ping succeeds. If so, echo the success.
 elif [ ! -z "$verify" ]; then
@@ -291,16 +294,16 @@ elif [ ! -z "$verify" ]; then
 echo "VPN is UP/UP" 1>&2
 echo "Sending New IP [$PEER_ROUTER_EXTERNAL_IP] and VPN confrimation email..." 1>&2
 
- if [ -e "./scripts/vpndown" ]; then
+ if [ -e "$VPN_DOWN_FILE" ]; then
 
-rm ./scripts/vpndown
+rm $VPN_DOWN_FILE
 
  fi
 
-echo "$PEER_ROUTER_EXTERNAL_IP" > ./scripts/iplog.txt
+echo "$PEER_ROUTER_EXTERNAL_IP" > $OLD_PEER_ROUTER_EXTERNAL_IP_LOG
 
 ## Email specific contextually important variable
-NEW_PEER_ROUTER_EXTERNAL_IP=$(cat ./scripts/iplog.txt)
+NEW_PEER_ROUTER_EXTERNAL_IP=$(cat $OLD_PEER_ROUTER_EXTERNAL_IP_LOG)
 ## Email IP and VPN Success
 SENDING_PEER_UPDATE_SUCCESS_EMAIL
 
