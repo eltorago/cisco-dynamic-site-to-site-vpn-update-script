@@ -59,11 +59,17 @@ OLD_PEER_ROUTER_EXTERNAL_IP=$(cat $OLD_PEER_ROUTER_EXTERNAL_IP_LOG)
 WHERE_IS_DATE=`which date`
 date=$($WHERE_IS_DATE)
 
+# Mail variables
+MAIL_SERVER_IP=127.0.0.1
+MAIL_SERVER_PORT=25
+MAIL_RECIPIENT=''
+MAIL_SENDER=''
+
 ## Functions
 ### Mail Functions
 PEER_UPDATE_SUCESS_TEMPLATE () {
-subject="Branch IP has changed."
-body="The Branch router has aquired a new IP address on $date
+SUBJECT="Branch IP has changed."
+BODY="The Branch router has aquired a new IP address on $date
 
 New IP: $NEW_PEER_ROUTER_EXTERNAL_IP
 
@@ -73,37 +79,35 @@ Last Known WAN IP: $PEER_LAST_KNOWN_IP"
 }
 
 PEER_ROUTER_IS_DOWN_TEMPLATE () {
-subject="Branch Router is down!"
-body="The branch router cannot be reached on $date"
+SUBJECT="Branch Router is down!"
+BODY="The branch router cannot be reached on $date"
 }
 
 VPN_REMOVAL_FAILURE_TEMPLATE () {
-subject="Cant remove VPN config!"
-body="The local router cannot be reached on $date"
+SUBJECT="Cant remove VPN config!"
+BODY="The local router cannot be reached on $date"
 }
 
 VPN_UPDATE_FAILURE_TEMPLATE () {
-subject="Cant update VPN config!"
-body="The local router cannot be configured on $date"
+SUBJECT="Cant update VPN config!"
+BODY="The local router cannot be configured on $date"
 }
 
 PEER_ROUTER_BACK_UP_TEMPLATE () {
-subject="VPN back up!"
-body="The VPN has been re-established on $date"
+SUBJECT="VPN back up!"
+BODY="The VPN has been re-established on $date"
 }
 
 ## Email template
 BASE_EMAIL_TEMPLATE () {
-local mail_srv_ip=127.0.0.1
-local mail_srv_port=25
-local recipient=
-nc $mail_srv_ip $mail_srv_port << EOF
+local recipient=$MAIL_RECIPIENT
+nc $MAIL_SERVER_IP $MAIL_SERVER_PORT << EOF
 ehlo mail.script
-mail from:<>
-rcpt to:<$recipient>
+mail from:<MAIL_SENDER>
+rcpt to:<$MAIL_RECIPIENT>
 data
-subject: $subject
-$body
+subject: $SUBJECT
+$BODY
 
 VPN Script
 .
