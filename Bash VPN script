@@ -17,9 +17,11 @@ if [ "$DEBUGMODE" = Y ]; then
 fi
 
 ## Go to Working Directory
-cd /home/rancid
+cd /home/rancid/scripts
 
 ## Modify these variables to your specific needs:
+## Script Directory
+SCRIPT_HOME=/home/rancid
 ## Rancid specific variables
 ## Rancid clogin
 RANCID_CLOGIN=/home/rancid/bin/clogin
@@ -47,12 +49,12 @@ PROSTERITY=`$RANCID_RUN $GROUP1 $GROUP2`
 ## General variables
 INTERNAL_PING=`ping -c 35 $PEER_ROUTER_INTERNAL_HOSTNAME | grep -Eo '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | awk -F'[ :]' 'NR==35'`
 PEER_ROUTER_EXTERNAL_IP=`ping -c 5 $PEER_ROUTER_EXTERNAL_HOSTNAME | grep -Eo '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | awk -F'[ :]' 'NR==5'`
-VPN_CONFIG_DELETED_FILE=./scripts/deletedvpn
-VPN_DOWN_FILE=./scripts/vpndown
-CONFIG_DEJA_VU=./scripts/dejavu
-PEER_LAST_KNOWN_IP_LOG=./scripts/lastWAN.txt
+VPN_CONFIG_DELETED_FILE=$SCRIPT_HOME/vpn/VPN_CONFIG_DELETED_FILE
+VPN_DOWN_FILE=$SCRIPT_HOME/vpn/VPN_DOWN_FILE
+CONFIG_DEJA_VU=$SCRIPT_HOME/vpn/CONFIG_DEJA_VU
+PEER_LAST_KNOWN_IP_LOG=$SCRIPT_HOME/vpn/PEER_LAST_KNOWN_IP_LOG
 PEER_LAST_KNOWN_IP=$(cat $PEER_LAST_KNOWN_IP_LOG)
-OLD_PEER_ROUTER_EXTERNAL_IP_LOG=./scripts/iplog.txt
+OLD_PEER_ROUTER_EXTERNAL_IP_LOG=$SCRIPT_HOME/vpn/OLD_PEER_ROUTER_EXTERNAL_IP_LOG.txt
 OLD_PEER_ROUTER_EXTERNAL_IP=$(cat $OLD_PEER_ROUTER_EXTERNAL_IP_LOG)
 WHERE_IS_DATE=`which date`
 date=$($WHERE_IS_DATE)
@@ -296,10 +298,10 @@ echo "$PEER_ROUTER_EXTERNAL_IP" > $PEER_LAST_KNOWN_IP_LOG
 #echo "$PEER_ROUTER_EXTERNAL_IP" > $OLD_PEER_ROUTER_EXTERNAL_IP_LOG
 
 ## Contextual based variable
-verify=`ping -c 35 $PEER_ROUTER_INTERNAL_HOSTNAME | grep -Eo '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | awk -F'[ :]' 'NR==35'`
+INTERNAL_PING_VERIFY=`ping -c 35 $PEER_ROUTER_INTERNAL_HOSTNAME | grep -Eo '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | awk -F'[ :]' 'NR==35'`
 
 ## Check if the internal branch IP address ping succeeds. If not so that is not my IP, the tunnel is not up so remove the config.
-if [ -z "$verify" ]; then
+if [ -z "$INTERNAL_PING_VERIFY" ]; then
 
  echo "Oh Dear! I could not resolve internal branch IP, [$PEER_ROUTER_EXTERNAL_IP] must not be our real WAN IP." 1>&2
 
@@ -309,7 +311,7 @@ RANCID_REMOVE_DEJA_VU
 echo "$PEER_ROUTER_EXTERNAL_IP" > $CONFIG_DEJA_VU; exit
 
 ## Check if the internal branch IP address ping succeeds. If so, echo the success.
-elif [ ! -z "$verify" ]; then
+elif [ ! -z "$INTERNAL_PING_VERIFY" ]; then
 
 echo "VPN is UP/UP" 1>&2
 echo "Sending New IP [$PEER_ROUTER_EXTERNAL_IP] and VPN confrimation email..." 1>&2
