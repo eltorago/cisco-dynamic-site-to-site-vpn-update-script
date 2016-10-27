@@ -21,8 +21,14 @@ cd /home/rancid
 
 ## Modify these variables to your specific needs:
 ## Rancid specific variables
-## Rancid Directory
-RANCID_RUN=/home/rancid/bin/clogin
+## Rancid clogin
+RANCID_CLOGIN=/home/rancid/bin/clogin
+## Rancid run
+RANCID_RUN=/home/rancid/bin/rancid-run
+## Rancid Groups
+GROUP1=''
+GROUP2=''
+#etc...
 ## Crypto map
 CRYPTO_MAP=''
 ##Crypto isakmp peer 0 key - please tell me how you can use 6 peer key, it doesn't seem to work.
@@ -34,6 +40,9 @@ LOCAL_ROUTER=''
 PEER_ROUTER_INTERNAL_HOSTNAME=''
 ## Your peer's external Hostname/Address
 PEER_ROUTER_EXTERNAL_HOSTNAME=''
+
+## Run rancid to capture differences
+PROSTERITY=`$RANCID_RUN $GROUP1 $GROUP2`
 
 ## General variables
 INTERNAL_PING=`ping -c 35 $PEER_ROUTER_INTERNAL_HOSTNAME | grep -Eo '[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}' | awk -F'[ :]' 'NR==35'`
@@ -113,7 +122,7 @@ SENGING_PEER_ROUTER_BACK_UP_EMAIL () { PEER_ROUTER_BACK_UP_TEMPLATE; BASE_EMAIL_
 ## Clogin Functions
 
 RANCID_REMOVE_CONFIG () {
-if [[ $(($RANCID_RUN -c "conf t; no crypto isakmp key 0 $VPN_KEY address $OLD_PEER_ROUTER_EXTERNAL_IP no-xauth; crypto map $CRYPTO_MAP 1 ipsec-isakmp; no set peer $OLD_PEER_ROUTER_EXTERNAL_IP; end; wr;" $LOCAL_ROUTER) | grep 'Error:') ]]; then
+if [[ $( ($RANCID_CLOGIN -c "conf t; no crypto isakmp key 0 $VPN_KEY address $OLD_PEER_ROUTER_EXTERNAL_IP no-xauth; crypto map $CRYPTO_MAP 1 ipsec-isakmp; no set peer $OLD_PEER_ROUTER_EXTERNAL_IP; end; wr;" $LOCAL_ROUTER) | grep 'Error:') ]]; then
 
 {
 echo "...And I can't even access the router"
@@ -130,6 +139,8 @@ else
 ## Remove the IP in the log so it stops updating if it comes back up with the same IP
 # echo "" > $OLD_PEER_ROUTER_EXTERNAL_IP_LOG
  echo "Removed old config, ending script" 
+# Run rancid
+PROSTERITY
 ## Email config removal and router down notice.
 SENDING_PEER_ROUTER_DOWN_EMAIL; exit
 
@@ -137,7 +148,7 @@ fi
 }
 
 RANCID_REMOVE_DEJA_VU () {
-if [[ $(($RANCID_RUN -c "conf t; no crypto isakmp key 0 $VPN_KEY address $OLD_PEER_ROUTER_EXTERNAL_IP no-xauth; crypto map $CRYPTO_MAP 1 ipsec-isakmp; no set peer $OLD_PEER_ROUTER_EXTERNAL_IP; end; wr;" $LOCAL_ROUTER) | grep 'Error:') ]]; then
+if [[ $( ($RANCID_CLOGIN -c "conf t; no crypto isakmp key 0 $VPN_KEY address $OLD_PEER_ROUTER_EXTERNAL_IP no-xauth; crypto map $CRYPTO_MAP 1 ipsec-isakmp; no set peer $OLD_PEER_ROUTER_EXTERNAL_IP; end; wr;" $LOCAL_ROUTER) | grep 'Error:') ]]; then
 
 {
 echo "...And I can't even access the router"
@@ -159,6 +170,9 @@ if [ "$PEER_ROUTER_EXTERNAL_IP" != "$(cat $CONFIG_DEJA_VU)" ]; then
  echo "" > $CONFIG_DEJA_VU;
  echo "Removed old config, ending script and emailing." 1>&2;
 
+# Run rancid
+PROSTERITY
+
 SENDING_PEER_ROUTER_DOWN_EMAIL; exit
 
 else
@@ -171,7 +185,7 @@ fi
 }
 
 RANCID_ADD_NEW_CONFIG () {
-if [[ $(($RANCID_RUN -c "conf t; crypto isakmp key 0 $VPN_KEY address $PEER_ROUTER_EXTERNAL_IP no-xauth; crypto map $CRYPTO_MAP 1 ipsec-isakmp; set peer $PEER_ROUTER_EXTERNAL_IP; end; wr;" $LOCAL_ROUTER) | grep 'Error:') ]]; then
+if [[ $( ($RANCID_CLOGIN -c "conf t; crypto isakmp key 0 $VPN_KEY address $PEER_ROUTER_EXTERNAL_IP no-xauth; crypto map $CRYPTO_MAP 1 ipsec-isakmp; set peer $PEER_ROUTER_EXTERNAL_IP; end; wr;" $LOCAL_ROUTER) | grep 'Error:') ]]; then
 
 # To Do: use push notification )Y)
   echo "Router Update Failed! Sending email..." 1>&2
@@ -183,11 +197,14 @@ else
 
 rm $VPN_CONFIG_DELETED_FILE
 
+# Run rancid
+PROSTERITY
+
 fi
 }
 
 RANCID_UPDATE_CONFIG () {
-if [[ $(($RANCID_RUN -c "conf t; no crypto isakmp key 0 $VPN_KEY address $OLD_PEER_ROUTER_EXTERNAL_IP no-xauth; crypto isakmp key 0 $VPN_KEY address $PEER_ROUTER_EXTERNAL_IP no-xauth; crypto map $CRYPTO_MAP 1 ipsec-isakmp; no set peer $OLD_PEER_ROUTER_EXTERNAL_IP; set peer $PEER_ROUTER_EXTERNAL_IP; end; wr;" $LOCAL_ROUTER) | grep 'Error:') ]]; then
+if [[ $( ($RANCID_CLOGIN -c "conf t; no crypto isakmp key 0 $VPN_KEY address $OLD_PEER_ROUTER_EXTERNAL_IP no-xauth; crypto isakmp key 0 $VPN_KEY address $PEER_ROUTER_EXTERNAL_IP no-xauth; crypto map $CRYPTO_MAP 1 ipsec-isakmp; no set peer $OLD_PEER_ROUTER_EXTERNAL_IP; set peer $PEER_ROUTER_EXTERNAL_IP; end; wr;" $LOCAL_ROUTER) | grep 'Error:') ]]; then
 
 # To Do: use push notification )Y)
   echo "Router Update Failed! Sending email..." 1>&2
@@ -195,9 +212,12 @@ if [[ $(($RANCID_RUN -c "conf t; no crypto isakmp key 0 $VPN_KEY address $OLD_PE
 ## Email config update failure
 SENDING_VPN_REMOVAL_FAILURE_EMAIL; exit
 
-elif [ -e "$novpn" ]; then
+elif [ -e "$VPN_CONFIG_DELETED_FILE" ]; then
 
 rm $VPN_CONFIG_DELETED_FILE
+
+# Run rancid
+PROSTERITY
 
 fi
 }
