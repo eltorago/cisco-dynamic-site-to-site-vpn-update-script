@@ -17,11 +17,11 @@ if [ "$DEBUGMODE" = Y ]; then
 fi
 
 ## Go to Working Directory
-cd /home/rancid/scripts
+cd /home/rancid
 
 ## Modify these variables to your specific needs:
 ## Script Directory
-SCRIPT_HOME=/home/rancid
+SCRIPT_HOME=/home/rancid/scripts
 ## Rancid specific variables
 ## Rancid clogin
 RANCID_CLOGIN=/home/rancid/bin/clogin
