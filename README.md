@@ -3,7 +3,7 @@ Automating a site-to-site VPN with Cisco equipment where both ends have dynamic 
 
 ## Requirements:
 
-- [Racnid](http://www.shrubbery.net/rancid/)
+- [Rancid](http://www.shrubbery.net/rancid/)
 - a domain or hosted dynDNS
 - DNS hosting if you have a domain - I recommend [dns.he.net](http://dns.he.net) for free hosting
 
